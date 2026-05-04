@@ -56,9 +56,8 @@ class ATPPredictor:
     SERVE_CLIP_HI = 0.75
     MODEL_VERSION = 'markov_ensemble_v1'
 
-    def __init__(self, models_dir='./models', data_dir='./data'):
+    def __init__(self, models_dir='./models'):
         models_dir = Path(models_dir)
-        data_dir = Path(data_dir)
 
         self.xgb_serve_p1 = xgb.XGBRegressor()
         self.xgb_serve_p1.load_model(str(models_dir / 'serve_model_p1.ubj'))
@@ -74,7 +73,7 @@ class ATPPredictor:
         self.platt_coef = float(pp['coef'])
         self.platt_intercept = float(pp['intercept'])
 
-        with open(data_dir / 'player_snapshots.json') as f:
+        with open(models_dir / 'player_snapshots.json') as f:
             self.snapshots = json.load(f)
 
         self._lookup = {self._normalize(name): name for name in self.snapshots}
