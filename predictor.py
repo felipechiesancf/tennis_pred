@@ -59,13 +59,13 @@ class ATPPredictor:
     def __init__(self, models_dir='./models'):
         models_dir = Path(models_dir)
 
-        self.xgb_serve_p1 = xgb.XGBRegressor()
+        self.xgb_serve_p1 = xgb.Booster()
         self.xgb_serve_p1.load_model(str(models_dir / 'serve_model_p1.ubj'))
 
-        self.xgb_serve_p2 = xgb.XGBRegressor()
+        self.xgb_serve_p2 = xgb.Booster()
         self.xgb_serve_p2.load_model(str(models_dir / 'serve_model_p2.ubj'))
 
-        self.xgb_direct = xgb.XGBClassifier()
+        self.xgb_direct = xgb.Booster()
         self.xgb_direct.load_model(str(models_dir / 'direct_model.ubj'))
 
         with open(models_dir / 'platt_params.json') as f:
@@ -122,18 +122,21 @@ class ATPPredictor:
         is_grand_slam = bool(best_of_5)
         row = self._build_row(p1_name, p2_name, surface, is_grand_slam, best_of_5)
         one = pd.DataFrame([row])
-        X1 = one[P1_SERVE_FEATURES].astype(float).values
-        X2 = one[P2_SERVE_FEATURES].astype(float).values
-        Xdir = one[DIRECT_FEATURES].astype(float).values
+        d1 = xgb.DMatrix(one[P1_SERVE_FEATURES].astype(float).values,
+                         feature_names=P1_SERVE_FEATURES)
+        d2 = xgb.DMatrix(one[P2_SERVE_FEATURES].astype(float).values,
+                         feature_names=P2_SERVE_FEATURES)
+        ddir = xgb.DMatrix(one[DIRECT_FEATURES].astype(float).values,
+                           feature_names=DIRECT_FEATURES)
 
-        p_serve_p1 = float(np.clip(self.xgb_serve_p1.predict(X1)[0],
+        p_serve_p1 = float(np.clip(self.xgb_serve_p1.predict(d1)[0],
                                    self.SERVE_CLIP_LO, self.SERVE_CLIP_HI))
-        p_serve_p2 = float(np.clip(self.xgb_serve_p2.predict(X2)[0],
+        p_serve_p2 = float(np.clip(self.xgb_serve_p2.predict(d2)[0],
                                    self.SERVE_CLIP_LO, self.SERVE_CLIP_HI))
 
         raw = markov_win_prob(p_serve_p1, p_serve_p2, best_of_5=bool(best_of_5))
         prob = self._platt(raw)
-        direct_prob = float(self.xgb_direct.predict_proba(Xdir)[0, 1])
+        direct_prob = float(self.xgb_direct.predict(ddir)[0])
         final_prob = 0.5 * prob + 0.5 * direct_prob
 
         return {

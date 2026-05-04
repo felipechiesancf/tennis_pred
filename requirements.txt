@@ -3,3 +3,4 @@ uvicorn
 xgboost
 numpy
 pandas
+scikit-learn
