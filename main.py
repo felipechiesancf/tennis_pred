@@ -41,6 +41,13 @@ def health():
     return {'status': 'ok', 'players_loaded': len(_predictor.snapshots)}
 
 
+@app.get('/players')
+def players():
+    if _predictor is None:
+        raise HTTPException(503, 'Predictor not initialized')
+    return {'players': sorted(_predictor.snapshots.keys())}
+
+
 @app.post('/api/predict')
 def predict(req: PredictRequest):
     if _predictor is None:

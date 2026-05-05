@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tennis Predictor | ATP Style</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0a1628;
+            --card-bg: #12233d;
+            --p1-color: #00a8ff;
+            --p2-color: #c8f000;
+            --text-main: #ffffff;
+            --text-dim: #a0aec0;
+            --border-color: #2d3748;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            background-color: var(--bg-color); 
+            color: var(--text-main); 
+            font-family: 'Inter', sans-serif; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            overflow-x: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            align-items: center;
+            gap: 40px;
+            padding: 20px;
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        /* Player Card Styles */
+        .player-card {
+            flex: 1;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 24px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            transition: transform 0.3s ease;
+        }
+
+        .player-card.p1 { border-top: 4px solid var(--p1-color); }
+        .player-card.p2 { border-top: 4px solid var(--p2-color); }
+
+        /* Search Dropdown */
+        .search-container { position: relative; margin-bottom: 25px; }
+        .search-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: #0f1d33;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: white;
+            font-size: 1rem;
+            outline: none;
+        }
+        .dropdown-list {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #1a2d4a;
+            border: 1px solid var(--border-color);
+            border-radius: 0 0 8px 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+        }
+        .dropdown-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .dropdown-item:hover { background: #253a5e; }
+
+        /* Player Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+            opacity: 0.6;
+            transition: opacity 0.3s;
+        }
+        .stats-grid.active { opacity: 1; }
+        .stat-item { font-size: 0.85rem; }
+        .stat-label { color: var(--text-dim); display: block; font-size: 0.75rem; margin-bottom: 4px; }
+        .stat-value { font-weight: 600; font-size: 1.1rem; }
+
+        /* Center Section */
+        .center-section {
+            flex: 0 0 400px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            width: 300px;
+            height: 300px;
+        }
+
+        .chart-center-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            pointer-events: none;
+        }
+        .matchup-text { font-weight: 800; font-size: 1.2rem; color: var(--text-dim); margin-bottom: 5px; }
+        .prob-main { font-size: 3rem; font-weight: 800; letter-spacing: -2px; }
+
+        /* Controls */
+        .controls {
+            margin-top: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-items: center;
+        }
+        .toggle-group {
+            display: flex;
+            background: #12233d;
+            padding: 4px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+        .toggle-btn {
+            padding: 8px 16px;
+            border: none;
+            background: transparent;
+            color: var(--text-dim);
+            cursor: pointer;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.2s;
+            font-size: 0.8rem;
+        }
+        .toggle-btn.active {
+            background: #2d3748;
+            color: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        /* Loader */
+        .loader {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255,255,255,0.1);
+            border-left-color: var(--p1-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: none;
+            z-index: 10;
+        }
+        @keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+
+        @media (max-width: 900px) {
+            .app-container { flex-direction: column; }
+            .center-section { order: -1; flex: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- Player 1 -->
+        <div class="player-card p1" id="card1">
+            <div class="search-container">
+                <input type="text" class="search-input" id="search1" placeholder="Search Player 1..." autocomplete="off">
+                <div class="dropdown-list" id="drop1"></div>
+            </div>
+            <div class="stats-grid" id="stats1">
+                <div class="stat-item"><span class="stat-label">RANK</span><span class="stat-value" id="rank1">-</span></div>
+                <div class="stat-item"><span class="stat-label">RECENT FORM</span><span class="stat-value" id="form1">-</span></div>
+                <div class="stat-item"><span class="stat-label">HARD WIN%</span><span class="stat-value" id="hard1">-</span></div>
+                <div class="stat-item"><span class="stat-label">CLAY WIN%</span><span class="stat-value" id="clay1">-</span></div>
+            </div>
+        </div>
+
+        <!-- Center Circle -->
+        <div class="center-section">
+            <div class="loader" id="loader"></div>
+            <div class="chart-wrapper">
+                <canvas id="probChart"></canvas>
+                <div class="chart-center-text">
+                    <div class="prob-main" id="prob1" style="color: var(--p1-color)">-</div>
+                    <div class="matchup-text" style="margin: 4px 0">VS</div>
+                    <div class="prob-main" id="prob2" style="color: var(--p2-color)">-</div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <div class="toggle-group" id="surfaceGroup">
+                    <button class="toggle-btn active" data-val="Hard">Hard</button>
+                    <button class="toggle-btn" data-val="Clay">Clay</button>
+                    <button class="toggle-btn" data-val="Grass">Grass</button>
+                </div>
+                <div class="toggle-group" id="formatGroup">
+                    <button class="toggle-btn active" data-val="false">Best of 3</button>
+                    <button class="toggle-btn" data-val="true">Best of 5</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Player 2 -->
+        <div class="player-card p2" id="card2">
+            <div class="search-container">
+                <input type="text" class="search-input" id="search2" placeholder="Search Player 2..." autocomplete="off">
+                <div class="dropdown-list" id="drop2"></div>
+            </div>
+            <div class="stats-grid" id="stats2">
+                <div class="stat-item"><span class="stat-label">RANK</span><span class="stat-value" id="rank2">-</span></div>
+                <div class="stat-item"><span class="stat-label">RECENT FORM</span><span class="stat-value" id="form2">-</span></div>
+                <div class="stat-item"><span class="stat-label">HARD WIN%</span><span class="stat-value" id="hard2">-</span></div>
+                <div class="stat-item"><span class="stat-label">CLAY WIN%</span><span class="stat-value" id="clay2">-</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIG & STATE ---
+        const API_URL = 'https://web-production-3021d.up.railway.app/api/predict';
+        let state = {
+            p1: null,
+            p2: null,
+            surface: 'Hard',
+            bestOf5: false,
+            allPlayers: []
+        };
+
+        let chart;
+
+        // --- INITIALIZATION ---
+        async function init() {
+            initChart();
+            await fetchPlayers();
+            setupEventListeners();
+        }
+
+        async function fetchPlayers() {
+            try {
+                const response = await fetch('https://web-production-3021d.up.railway.app/players');
+                if (!response.ok) throw new Error();
+                const data = await response.json();
+                state.allPlayers = data.players;
+            } catch (e) {
+                console.warn("Could not fetch player list.");
+                state.allPlayers = [];
+            }
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('probChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Player 1', 'Player 2'],
+                    datasets: [{
+                        data: [50, 50],
+                        backgroundColor: ['#00a8ff', '#c8f000'],
+                        borderWidth: 0,
+                        cutout: '80%'
+                    }]
+                },
+                options: {
+                    plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+
+        // --- LOGIC ---
+        async function updatePrediction() {
+            if (!state.p1 || !state.p2) return;
+
+            document.getElementById('loader').style.display = 'block';
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        p1_name: state.p1,
+                        p2_name: state.p2,
+                        surface: state.surface,
+                        best_of_5: state.bestOf5
+                    })
+                });
+
+                const data = await response.json();
+                
+                const p1Prob = Math.round(data.p1_win_prob * 100);
+                const p2Prob = 100 - p1Prob;
+
+                // Update UI
+                document.getElementById('prob1').innerText = `${p1Prob}%`;
+                document.getElementById('prob2').innerText = `${p2Prob}%`;
+                chart.data.datasets[0].data = [p1Prob, p2Prob];
+                chart.update();
+
+            } catch (error) {
+                console.error("Prediction error:", error);
+                alert("Error connecting to API");
+            } finally {
+                document.getElementById('loader').style.display = 'none';
+            }
+        }
+
+        function updatePlayerStats(playerNum, name) {
+            // Real per-player stats will populate once a /player-stats endpoint exists.
+            document.getElementById(`rank${playerNum}`).innerText = '-';
+            document.getElementById(`form${playerNum}`).innerText = '-';
+            document.getElementById(`hard${playerNum}`).innerText = '-';
+            document.getElementById(`clay${playerNum}`).innerText = '-';
+            document.getElementById(`stats${playerNum}`).classList.add('active');
+        }
+
+        // --- UI EVENTS ---
+        function setupEventListeners() {
+            // Search Inputs
+            [1, 2].forEach(num => {
+                const input = document.getElementById(`search${num}`);
+                const drop = document.getElementById(`drop${num}`);
+
+                input.addEventListener('input', (e) => {
+                    const val = e.target.value.toLowerCase();
+                    drop.innerHTML = '';
+                    if (!val) { drop.style.display = 'none'; return; }
+
+                    const filtered = state.allPlayers.filter(p => p.toLowerCase().includes(val));
+                    
+                    if (filtered.length === 0) {
+                        drop.innerHTML = `<div class="dropdown-item" style="color: #ff4d4d">Player not found</div>`;
+                    } else {
+                        filtered.forEach(p => {
+                            const div = document.createElement('div');
+                            div.className = 'dropdown-item';
+                            div.innerText = p;
+                            div.onclick = () => {
+                                input.value = p;
+                                drop.style.display = 'none';
+                                state[`p${num}`] = p;
+                                updatePlayerStats(num, p);
+                                updatePrediction();
+                            };
+                            drop.appendChild(div);
+                        });
+                    }
+                    drop.style.display = 'block';
+                });
+
+                // Close dropdown when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (!e.target.closest('.search-container')) drop.style.display = 'none';
+                });
+            });
+
+            // Surface Toggle
+            document.getElementById('surfaceGroup').addEventListener('click', (e) => {
+                if (e.target.classList.contains('toggle-btn')) {
+                    document.querySelectorAll('#surfaceGroup .toggle-btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    state.surface = e.target.dataset.val;
+                    updatePrediction();
+                }
+            });
+
+            // Format Toggle
+            document.getElementById('formatGroup').addEventListener('click', (e) => {
+                if (e.target.classList.contains('toggle-btn')) {
+                    document.querySelectorAll('#formatGroup .toggle-btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    state.bestOf5 = e.target.dataset.val === 'true';
+                    updatePrediction();
+                }
+            });
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
