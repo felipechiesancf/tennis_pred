@@ -118,6 +118,14 @@ class ATPPredictor:
         return row
 
     def predict(self, p1_name, p2_name, surface, best_of_5):
+        # Training data assigned p1/p2 alphabetically. Re-impose that order
+        # internally and flip the result back so the API remains symmetric:
+        # predict(A, B) and predict(B, A) return mirrored probabilities.
+        orig_p1, orig_p2 = p1_name, p2_name
+        flipped = p1_name.lower() > p2_name.lower()
+        if flipped:
+            p1_name, p2_name = p2_name, p1_name
+
         # Men's BO5 only happens at slams in modern tour play.
         is_grand_slam = bool(best_of_5)
         row = self._build_row(p1_name, p2_name, surface, is_grand_slam, best_of_5)
@@ -139,10 +147,13 @@ class ATPPredictor:
         direct_prob = float(self.xgb_direct.predict(ddir)[0])
         final_prob = 0.5 * prob + 0.5 * direct_prob
 
+        if flipped:
+            final_prob = 1.0 - final_prob
+
         return {
             'p1_win_prob': final_prob,
             'p2_win_prob': 1.0 - final_prob,
-            'predicted_winner': p1_name if final_prob > 0.5 else p2_name,
+            'predicted_winner': orig_p1 if final_prob > 0.5 else orig_p2,
             'model': self.MODEL_VERSION,
             'surface': surface,
         }
