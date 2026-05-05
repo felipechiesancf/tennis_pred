@@ -191,10 +191,10 @@
                 <div class="dropdown-list" id="drop1"></div>
             </div>
             <div class="stats-grid" id="stats1">
-                <div class="stat-item"><span class="stat-label">RANK</span><span class="stat-value" id="rank1">-</span></div>
-                <div class="stat-item"><span class="stat-label">RECENT FORM</span><span class="stat-value" id="form1">-</span></div>
-                <div class="stat-item"><span class="stat-label">HARD WIN%</span><span class="stat-value" id="hard1">-</span></div>
-                <div class="stat-item"><span class="stat-label">CLAY WIN%</span><span class="stat-value" id="clay1">-</span></div>
+                <div class="stat-item"><span class="stat-label">AGE</span><span class="stat-value" id="age1">-</span></div>
+                <div class="stat-item"><span class="stat-label">HAND</span><span class="stat-value" id="hand1">-</span></div>
+                <div class="stat-item"><span class="stat-label" id="winrateLabel1">WIN% HARD</span><span class="stat-value" id="winrate1">-</span></div>
+                <div class="stat-item"><span class="stat-label" id="acesLabel1">ACES/MATCH HARD</span><span class="stat-value" id="aces1">-</span></div>
             </div>
         </div>
 
@@ -230,10 +230,10 @@
                 <div class="dropdown-list" id="drop2"></div>
             </div>
             <div class="stats-grid" id="stats2">
-                <div class="stat-item"><span class="stat-label">RANK</span><span class="stat-value" id="rank2">-</span></div>
-                <div class="stat-item"><span class="stat-label">RECENT FORM</span><span class="stat-value" id="form2">-</span></div>
-                <div class="stat-item"><span class="stat-label">HARD WIN%</span><span class="stat-value" id="hard2">-</span></div>
-                <div class="stat-item"><span class="stat-label">CLAY WIN%</span><span class="stat-value" id="clay2">-</span></div>
+                <div class="stat-item"><span class="stat-label">AGE</span><span class="stat-value" id="age2">-</span></div>
+                <div class="stat-item"><span class="stat-label">HAND</span><span class="stat-value" id="hand2">-</span></div>
+                <div class="stat-item"><span class="stat-label" id="winrateLabel2">WIN% HARD</span><span class="stat-value" id="winrate2">-</span></div>
+                <div class="stat-item"><span class="stat-label" id="acesLabel2">ACES/MATCH HARD</span><span class="stat-value" id="aces2">-</span></div>
             </div>
         </div>
     </div>
@@ -246,7 +246,9 @@
             p2: null,
             surface: 'Hard',
             bestOf5: false,
-            allPlayers: []
+            allPlayers: [],
+            stats1: null,
+            stats2: null
         };
 
         let chart;
@@ -275,15 +277,16 @@
             chart = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
-                    labels: ['Player 1', 'Player 2'],
+                    labels: ['Player 2', 'Player 1'],
                     datasets: [{
                         data: [50, 50],
-                        backgroundColor: ['#00a8ff', '#c8f000'],
+                        backgroundColor: ['#c8f000', '#00a8ff'],
                         borderWidth: 0,
                         cutout: '80%'
                     }]
                 },
                 options: {
+                    rotation: 90,
                     plugins: { legend: { display: false }, tooltip: { enabled: false } },
                     responsive: true,
                     maintainAspectRatio: false
@@ -317,7 +320,8 @@
                 // Update UI
                 document.getElementById('prob1').innerText = `${p1Prob}%`;
                 document.getElementById('prob2').innerText = `${p2Prob}%`;
-                chart.data.datasets[0].data = [p1Prob, p2Prob];
+                // dataset order is [p2, p1] to match swapped colors / labels.
+                chart.data.datasets[0].data = [p2Prob, p1Prob];
                 chart.update();
 
             } catch (error) {
@@ -328,13 +332,33 @@
             }
         }
 
-        function updatePlayerStats(playerNum, name) {
-            // Real per-player stats will populate once a /player-stats endpoint exists.
-            document.getElementById(`rank${playerNum}`).innerText = '-';
-            document.getElementById(`form${playerNum}`).innerText = '-';
-            document.getElementById(`hard${playerNum}`).innerText = '-';
-            document.getElementById(`clay${playerNum}`).innerText = '-';
-            document.getElementById(`stats${playerNum}`).classList.add('active');
+        async function loadPlayerStats(playerNum, name) {
+            try {
+                const res = await fetch(`https://web-production-3021d.up.railway.app/player-stats/${encodeURIComponent(name)}`);
+                if (!res.ok) throw new Error();
+                const s = await res.json();
+                state[`stats${playerNum}`] = s;
+                updateStatsDisplay(playerNum, s, state.surface);
+            } catch (e) {
+                console.warn(`Could not load stats for ${name}`);
+            }
+        }
+
+        function updateStatsDisplay(num, stats, surface) {
+            // Snapshots store flat win_rate / ace_rate (not per-surface), so values
+            // don't change with the surface toggle — only the column labels do.
+            if (!stats) return;
+            const surfUpper = surface.toUpperCase();
+            document.getElementById(`age${num}`).innerText =
+                stats.age != null ? `${stats.age.toFixed(1)} yrs` : '-';
+            document.getElementById(`hand${num}`).innerText = stats.hand || '-';
+            document.getElementById(`winrateLabel${num}`).innerText = `WIN% ${surfUpper}`;
+            document.getElementById(`acesLabel${num}`).innerText  = `ACE RATE ${surfUpper}`;
+            document.getElementById(`winrate${num}`).innerText =
+                stats.win_rate != null ? `${(stats.win_rate * 100).toFixed(1)}%` : '-';
+            document.getElementById(`aces${num}`).innerText =
+                stats.ace_rate != null ? `${(stats.ace_rate * 100).toFixed(1)}%` : '-';
+            document.getElementById(`stats${num}`).classList.add('active');
         }
 
         // --- UI EVENTS ---
@@ -362,7 +386,7 @@
                                 input.value = p;
                                 drop.style.display = 'none';
                                 state[`p${num}`] = p;
-                                updatePlayerStats(num, p);
+                                loadPlayerStats(num, p);
                                 updatePrediction();
                             };
                             drop.appendChild(div);
@@ -383,6 +407,8 @@
                     document.querySelectorAll('#surfaceGroup .toggle-btn').forEach(b => b.classList.remove('active'));
                     e.target.classList.add('active');
                     state.surface = e.target.dataset.val;
+                    updateStatsDisplay(1, state.stats1, state.surface);
+                    updateStatsDisplay(2, state.stats2, state.surface);
                     updatePrediction();
                 }
             });
